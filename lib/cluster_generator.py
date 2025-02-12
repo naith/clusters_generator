@@ -8,14 +8,14 @@ class ClusterGenerator:
     Umožňuje vytvářet shluky bodů s gaussovským nebo uniformním rozložením.
     """
 
-    def __init__(self, waypoints, tension, cluster_size, diameter_factor):
+    def __init__(self, waypoints, tension, cluster_density):
         """
         Inicializace generátoru clusterů.
 
         Args:
             waypoints: Řídící body křivky
             tension: Napětí křivky (ovlivňuje její hladkost)
-            cluster_size: Počet bodů v každém clusteru
+            cluster_density: Počet bodů v každém clusteru
             diameter_factor: Faktor pro výpočet průměru clusteru
         """
         self.clusters = None
@@ -23,8 +23,7 @@ class ClusterGenerator:
         self.centers = None
         self.waypoints = np.array(waypoints)
         self.tension = tension
-        self.cluster_size = cluster_size
-        self.diameter_factor = diameter_factor
+        self.cluster_density = cluster_density
 
     def compute_constant_spread(self, centers, diameter_factor=0.8):
         """
@@ -43,56 +42,65 @@ class ClusterGenerator:
 
     def create_cluster_3d(self, center, spread=0.01, distribution='gauss'):
         """
-        Vytvoří cluster bodů kolem daného centra.
-
-        Args:
-            center: Centrum clusteru
-            spread: Rozptyl bodů od centra
-            distribution: Typ rozložení ('gauss' nebo 'uniform')
-        Returns:
-            numpy.ndarray: Pole bodů clusteru
+        Vytváří kulový cluster bodů kolem daného centra.
+        Pro jeden bod používá přímo zadané parametry pro velikost a počet bodů.
         """
         center = np.array(center)
+
         if distribution == 'gauss':
-            offsets = np.random.normal(0, spread, size=(self.cluster_size, 3))
+            # Pro gaussovské rozložení používáme spread jako poloměr
+            # a spread/3 jako směrodatnou odchylku
+            points = np.random.normal(0, spread / 3, size=(self.cluster_density, 3))
         else:
-            offsets = np.random.uniform(-spread, spread, size=(self.cluster_size, 3))
-        return center + offsets
+            # Pro uniformní rozložení generujeme body rovnoměrně v kouli
+            points = []
+            while len(points) < self.cluster_density:
+                point = np.random.uniform(-spread, spread, 3)
+                if np.linalg.norm(point) <= spread:
+                    points.append(point)
+            points = np.array(points)
 
-    def generate_shape(self, tension, distribution, total_samples):
+        return center + points
+
+    def generate_shape(self, tension, distribution, radius=1, distance_ratio=0.125):
         """
-        Generuje kompletní tvar složený z clusterů podél křivky.
+        Generuje kompletní tvar složený z clusterů.
 
-        Nejprve vypočítá přibližnou křivku pro určení základního rozptylu,
-        pak použije tento rozptyl pro přesné rozmístění bodů.
+        Nyní můžeme kontrolovat jak velikost clusterů (radius), tak vzdálenost mezi jejich
+        centry (radius * distance_ratio). Například:
+        - distance_ratio = 1.0: centra jsou vzdálena o celý poloměr clusteru
+        - distance_ratio = 0.5: centra jsou vzdálena o polovinu poloměru clusteru
+        - distance_ratio = 0.2: centra jsou vzdálena o pětinu poloměru clusteru
 
         Args:
-            tension: Napětí křivky
-            distribution: Typ rozložení bodů v clusterech
-            total_samples: Celkový počet vzorků
+            tension: Napětí křivky (určuje její hladkost)
+            distribution: Typ rozložení bodů v clusterech ('gauss' nebo 'uniform')
+            radius: Poloměr clusterů
+            distance_ratio: Poměr vzdálenosti mezi centry vůči poloměru (0-1)
         """
-        # Nejprve vytvoříme hrubou aproximaci křivky pro výpočet rozptylu
-        rough_centers = self.catmull_rom_spline_3d_uniform(
-            self.waypoints,
-            total_samples=max(10, len(self.waypoints) * 2),
-            tension=tension
-        )
+        self.spread = radius
 
-        # Vypočítáme počáteční rozptyl z hrubé aproximace
-        if len(rough_centers) >= 2:
-            initial_dist = np.linalg.norm(rough_centers[1] - rough_centers[0])
-            self.spread = initial_dist * self.diameter_factor / 2.0
-        else:
-            # Fallback pro případ příliš krátkých křivek
-            self.spread = np.linalg.norm(self.waypoints[1] - self.waypoints[0]) * self.diameter_factor / 2.0
+        if len(self.waypoints) == 1:
+            # Pro jediný bod - vytváříme kulový cluster
+            self.centers = self.waypoints
+            self.clusters = [
+                self.create_cluster_3d(
+                    self.centers[0],
+                    spread=self.spread,
+                    distribution=distribution
+                )
+            ]
+            self.clusters = np.vstack(self.clusters)
+            return
 
-        # Nyní můžeme generovat body s přesnou vzdáleností
+        # Pro více bodů - generujeme body s upravenou vzdáleností
+        center_distance = radius * distance_ratio  # Vzdálenost mezi centry
         self.centers = self.const_distance_uniform_catmull_rom_spline(
-            radius=self.spread,
+            radius=center_distance,  # Používáme upravenou vzdálenost pro centra
             tension=tension
         )
 
-        # Generujeme clustery
+        # Generování clusterů - zde stále používáme původní radius
         self.clusters = []
         for c in self.centers:
             self.clusters.append(

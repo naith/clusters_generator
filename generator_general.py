@@ -207,7 +207,7 @@ def generate_sphere_waypoints(center=None):
 
 
 # --------------------------------------------------
-# DEMO: Tři různé křivky v JEDNOM GRAFU + Poisson-disk
+# DEMO: Různé křivky v JEDNOM GRAFU + Poisson-disk
 # --------------------------------------------------
 def demo_three_curves_in_one_figure():
     # 2) Catmull-Rom + Clustery
@@ -273,7 +273,7 @@ def demo_three_curves_in_one_figure():
     waypoints_sphere2 = generate_sphere_waypoints([-8, -11, 0])
     cg_sphere2 = ClusterGenerator(waypoints_sphere2, tension=0.165, cluster_density=400)
     cg_sphere2.generate_shape(tension=0.165, distribution='gauss', radius=4)
-    cg_sphere2.transform_nd_axes([0, 0, 0], [1, 1, 1], [0, 0, 0])
+    cg_sphere2.transform_clusters([30, 30, 0], [1, 0.5, 1.6], [0, 0, 0])
     cg_sphere2.add_scatter_traces(fig, color='pink', name_prefix='Sphere1')
 
     # 3) Generujeme Poisson-disk body pro BOX [-20,20]^3

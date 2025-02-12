@@ -199,6 +199,69 @@ class ClusterGenerator:
         self.waypoints = new_points
         return
 
+    def transform_clusters(self, rotations, scales, translation):
+        """
+        Aplikuje transformace na vygenerované body clusteru v n-rozměrném prostoru,
+        přičemž zachovává pozici známého centra clusteru.
+
+        Metoda využívá centrum uložené při generování clusteru a provádí transformace
+        vzhledem k tomuto bodu. Tento přístup je efektivnější a přesnější než
+        počítání centra z bodů.
+
+        Args:
+            rotations: Seznam úhlů rotace ve stupních pro každou osu
+            scales: Seznam škálovacích faktorů pro každou osu
+            translation: Seznam posunů pro každou osu
+        """
+        if self.clusters is None or self.centers is None:
+            raise ValueError("Nejprve musíte vygenerovat cluster pomocí generate_shape")
+
+        n = self.clusters.shape[1]
+
+        # Kontrola vstupních parametrů
+        if len(rotations) != n or len(scales) != n or len(translation) != n:
+            raise ValueError(f"Všechny transformační parametry musí mít délku {n}")
+
+        # Použijeme známé centrum clusteru
+        center = self.centers[0]  # Pro jeden cluster máme jedno centrum
+
+        # Posuneme cluster do počátku souřadnic vzhledem ke známému centru
+        points = self.clusters - center
+
+        # Aplikujeme škálování
+        S = np.diag(scales)
+        points = points @ S
+
+        # Aplikujeme rotace
+        for axis in range(n):
+            if rotations[axis] == 0:
+                continue
+
+            angle = np.radians(rotations[axis])
+            plane_axes = [i for i in range(n) if i != axis][:2]
+
+            if len(plane_axes) < 2:
+                continue
+
+            R = np.eye(n)
+            i, j = plane_axes
+            cos_a = np.cos(angle)
+            sin_a = np.sin(angle)
+            R[i, i] = cos_a
+            R[i, j] = -sin_a
+            R[j, i] = sin_a
+            R[j, j] = cos_a
+
+            points = points @ R
+
+        # Vrátíme cluster na původní pozici
+        points = points + center
+
+        # Aplikujeme dodatečnou translaci
+        points = points + translation
+
+        self.clusters = points
+
     def const_distance_uniform_catmull_rom_spline(self, radius, tension=0.165):
         """
         Generuje body na křivce s přesně konstantní vzdáleností R (poloměr clusteru).

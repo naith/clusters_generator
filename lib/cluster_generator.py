@@ -3,21 +3,9 @@ import plotly.graph_objects as go
 
 
 class ClusterGenerator:
-    """
-    Třída pro generování clusterů bodů podél Catmull-Rom křivky.
-    Umožňuje vytvářet shluky bodů s gaussovským nebo uniformním rozložením.
-    """
 
     def __init__(self, waypoints, tension, cluster_density):
-        """
-        Inicializace generátoru clusterů.
 
-        Args:
-            waypoints: Řídící body křivky
-            tension: Napětí křivky (ovlivňuje její hladkost)
-            cluster_density: Počet bodů v každém clusteru
-            diameter_factor: Faktor pro výpočet průměru clusteru
-        """
         self.clusters = None
         self.spread = None
         self.centers = None
@@ -26,25 +14,14 @@ class ClusterGenerator:
         self.cluster_density = cluster_density
 
     def compute_constant_spread(self, centers, diameter_factor=0.8):
-        """
-        Vypočítá rozptyl pro všechny clustery na základě vzdálenosti mezi prvními dvěma body.
 
-        Args:
-            centers: Pole center clusterů
-            diameter_factor: Faktor pro výpočet průměru clusteru
-        Returns:
-            float: Poloměr pro generování clusterů
-        """
         dist = np.linalg.norm(centers[1] - centers[0])
         diameter = dist * diameter_factor
         radius = diameter / 2.0
         return radius
 
     def create_cluster_3d(self, center, spread=0.01, distribution='gauss'):
-        """
-        Vytváří kulový cluster bodů kolem daného centra.
-        Pro jeden bod používá přímo zadané parametry pro velikost a počet bodů.
-        """
+
         center = np.array(center)
 
         if distribution == 'gauss':
@@ -63,21 +40,7 @@ class ClusterGenerator:
         return center + points
 
     def generate_shape(self, tension, distribution, radius=1, distance_ratio=0.125):
-        """
-        Generuje kompletní tvar složený z clusterů.
 
-        Nyní můžeme kontrolovat jak velikost clusterů (radius), tak vzdálenost mezi jejich
-        centry (radius * distance_ratio). Například:
-        - distance_ratio = 1.0: centra jsou vzdálena o celý poloměr clusteru
-        - distance_ratio = 0.5: centra jsou vzdálena o polovinu poloměru clusteru
-        - distance_ratio = 0.2: centra jsou vzdálena o pětinu poloměru clusteru
-
-        Args:
-            tension: Napětí křivky (určuje její hladkost)
-            distribution: Typ rozložení bodů v clusterech ('gauss' nebo 'uniform')
-            radius: Poloměr clusterů
-            distance_ratio: Poměr vzdálenosti mezi centry vůči poloměru (0-1)
-        """
         self.spread = radius
 
         if len(self.waypoints) == 1:
@@ -109,52 +72,56 @@ class ClusterGenerator:
             )
         self.clusters = np.vstack(self.clusters)
 
-    def add_scatter_traces(self, fig, color, name_prefix):
-        """
-        Přidá vizualizační stopy do Plotly grafu.
+    def add_scatter_traces(self, fig, color, name_prefix,
+                           show_waypoints=True, show_lines=True,
+                           show_centers=True, show_clusters=True):
 
-        Args:
-            fig: Plotly Figure objekt
-            color: Barva pro vizualizaci
-            name_prefix: Prefix pro názvy stop
-        """
         if self.waypoints.ndim > 3:
             return
-        fig.add_trace(go.Scatter3d(
-            x=self.waypoints[:, 0],
-            y=self.waypoints[:, 1],
-            z=self.waypoints[:, 2],
-            mode='markers',
-            marker=dict(size=4, color=color),
-            name=f'{name_prefix} Waypoints'
-        ))
-        fig.add_trace(go.Scatter3d(
-            x=self.centers[:, 0],
-            y=self.centers[:, 1],
-            z=self.centers[:, 2],
-            mode='lines+markers',
-            marker=dict(size=2, color=color),
-            line=dict(width=2, color=color),
-            name=f'{name_prefix} Křivka (centra)'
-        ))
-        fig.add_trace(go.Scatter3d(
-            x=self.clusters[:, 0],
-            y=self.clusters[:, 1],
-            z=self.clusters[:, 2],
-            mode='markers',
-            marker=dict(size=2, color=color, opacity=0.5),
-            name=f'{name_prefix} Clustery'
-        ))
+
+        if show_waypoints:
+            fig.add_trace(go.Scatter3d(
+                x=self.waypoints[:, 0],
+                y=self.waypoints[:, 1],
+                z=self.waypoints[:, 2],
+                mode='markers',
+                marker=dict(size=4, color=color),
+                name=f'{name_prefix} Waypoints'
+            ))
+
+        if show_centers:
+            fig.add_trace(go.Scatter3d(
+                x=self.waypoints[:, 0],
+                y=self.waypoints[:, 1],
+                z=self.waypoints[:, 2],
+                mode='markers',
+                marker=dict(size=4, color=color),
+                name=f'{name_prefix} Waypoints'
+            ))
+
+        if show_lines:
+            fig.add_trace(go.Scatter3d(
+                x=self.centers[:, 0],
+                y=self.centers[:, 1],
+                z=self.centers[:, 2],
+                mode='lines+markers',
+                marker=dict(size=2, color=color),
+                line=dict(width=2, color=color),
+                name=f'{name_prefix} Křivka (centra)'
+            ))
+
+        if show_clusters:
+            fig.add_trace(go.Scatter3d(
+                x=self.clusters[:, 0],
+                y=self.clusters[:, 1],
+                z=self.clusters[:, 2],
+                mode='markers',
+                marker=dict(size=2, color=color, opacity=1),
+                name=f'{name_prefix} Clustery'
+            ))
 
     def transform_nd_axes(self, angles, scales, translation):
-        """
-        Transformuje body v n-dimenzionálním prostoru.
 
-        Args:
-            angles: Úhly rotace pro každou osu
-            scales: Škálovací faktory pro každou osu
-            translation: Vektor posunutí
-        """
         if self.waypoints.ndim != 2:
             raise ValueError("Param 'points' musí být 2D matice (N, n).")
         n = self.waypoints.shape[1]
@@ -200,19 +167,7 @@ class ClusterGenerator:
         return
 
     def transform_clusters(self, rotations, scales, translation):
-        """
-        Aplikuje transformace na vygenerované body clusteru v n-rozměrném prostoru,
-        přičemž zachovává pozici známého centra clusteru.
 
-        Metoda využívá centrum uložené při generování clusteru a provádí transformace
-        vzhledem k tomuto bodu. Tento přístup je efektivnější a přesnější než
-        počítání centra z bodů.
-
-        Args:
-            rotations: Seznam úhlů rotace ve stupních pro každou osu
-            scales: Seznam škálovacích faktorů pro každou osu
-            translation: Seznam posunů pro každou osu
-        """
         if self.clusters is None or self.centers is None:
             raise ValueError("Nejprve musíte vygenerovat cluster pomocí generate_shape")
 
@@ -263,15 +218,7 @@ class ClusterGenerator:
         self.clusters = points
 
     def const_distance_uniform_catmull_rom_spline(self, radius, tension=0.165):
-        """
-        Generuje body na křivce s přesně konstantní vzdáleností R (poloměr clusteru).
 
-        Args:
-            radius: Požadovaná vzdálenost mezi body (poloměr clusteru)
-            tension: Napětí křivky
-        Returns:
-            numpy.ndarray: Pole bodů na křivce s konstantní vzdáleností
-        """
         wp = np.array(self.waypoints)
         n = len(wp)
         if n < 2:
@@ -347,112 +294,15 @@ class ClusterGenerator:
 
         return np.array(result)
 
-    def adaptive_catmull_rom_spline(self, min_distance, tension=0.05):
-        """
-        Generuje body na Catmull-Rom křivce s adaptivním dělením.
-
-        Args:
-            min_distance: Minimální vzdálenost mezi body
-            tension: Napětí křivky
-        Returns:
-            numpy.ndarray: Pole bodů na křivce
-        """
-        wp = np.array(self.waypoints)
-        n = len(wp)
-        if n < 2:
-            return wp
-
-        result = []
-
-        def subdivide(p1, p2, s, tau):
-            dist = np.linalg.norm(p2 - p1)
-            if dist > min_distance:
-                mid_tau = tau / 2
-                t_global = s + mid_tau
-                new_s = int(np.floor(t_global))
-                new_tau = t_global - new_s
-                p0 = wp[s - 1] if s - 1 >= 0 else p1
-                p3 = wp[s + 2] if (s + 2) < n else p2
-                C1, C2 = self.catmull_rom_to_bezier(p0, p1, p2, p3,
-                                                    tension=tension)
-                B = self.bezier_point(p1, C1, C2, p2, new_tau)
-
-                subdivide(p1, B, s, new_tau)
-                subdivide(B, p2, new_s, tau - new_tau)
-            else:
-                result.append(p1)
-
-        for s in range((n - 1)):
-            p1 = wp[s]
-            p2 = wp[s + 1]
-            subdivide(p1, p2, s, 1)
-
-        result.append(wp[-1])
-        return np.array(result)
-
     def bezier_point(self, p0, p1, p2, p3, t):
-        """
-        Vypočítá bod na kubické Bézierově křivce.
 
-        Args:
-            p0, p1, p2, p3: Kontrolní body křivky
-            t: Parametr křivky (0 až 1)
-        Returns:
-            numpy.ndarray: Bod na křivce
-        """
         return ((1 - t) ** 3 * p0 +
                 3 * (1 - t) ** 2 * t * p1 +
                 3 * (1 - t) * t ** 2 * p2 +
                 t ** 3 * p3)
 
-    def catmull_rom_spline_3d_uniform(self, waypoints, total_samples=100, tension=0.5):
-        """
-        Generuje uniformně vzorkované body na 3D Catmull-Rom křivce.
-
-        Args:
-            waypoints: Řídící body křivky
-            total_samples: Celkový počet vzorků
-            tension: Napětí křivky
-        Returns:
-            numpy.ndarray: Pole bodů na křivce
-        """
-        wp = np.array(waypoints)
-        n = len(wp)
-        if n < 2 or total_samples < 2:
-            return wp
-
-        result = []
-        for i in range(total_samples):
-            t_global = (n - 1) * i / (total_samples - 1)
-            s = int(np.floor(t_global))
-            tau = t_global - s
-
-            if s >= n - 1:
-                s = n - 2
-                tau = 1.0
-
-            p1 = wp[s]
-            p2 = wp[s + 1]
-            p0 = wp[s - 1] if s - 1 >= 0 else p1
-            p3 = wp[s + 2] if (s + 2) < n else p2
-
-            C1, C2 = self.catmull_rom_to_bezier(p0, p1, p2, p3,
-                                                tension=tension)
-            B = self.bezier_point(p1, C1, C2, p2, tau)
-            result.append(B)
-
-        return np.array(result)
-
     def catmull_rom_to_bezier(self, p0, p1, p2, p3, tension=0.5):
-        """
-        Převede kontrolní body Catmull-Rom křivky na kontrolní body Bézierovy křivky.
 
-        Args:
-            p0, p1, p2, p3: Kontrolní body Catmull-Rom křivky
-            tension: Napětí křivky
-        Returns:
-            tuple: Dvojice kontrolních bodů pro Bézierovu křivku
-        """
         factor = (1 - tension) / 6.0
         d1 = (p2 - p0) * tension
         d2 = (p3 - p1) * tension

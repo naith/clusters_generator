@@ -9,10 +9,7 @@ from lib.cluster_generator import ClusterGenerator
 # --------------------------------------------------
 def generate_modulated_ring(num_points=10, radius=1.0, z_amplitude=0.2,
                             freq=3, center=(0, 0, 0)):
-    """
-    Vytvoří prstenec (kruh v rovině XY) s modulací sinusovkou v ose Z,
-    posunutý o vektor center = (cx, cy, cz).
-    """
+
     t = np.linspace(0, 2 * np.pi, num_points, endpoint=False)
     x = radius * np.cos(t)
     y = radius * np.sin(t)
@@ -29,11 +26,7 @@ def generate_modulated_ring(num_points=10, radius=1.0, z_amplitude=0.2,
 
 def generate_semi_circle(num_points=10, radius=1.0, z_offset=0.0,
                          center=(0, 0, 0)):
-    """
-    Vygeneruje půlkruh v rovině XY (z=0),
-    pak posune nahoru o z_offset (původní volba),
-    a nakonec posune o vektor center = (cx, cy, cz).
-    """
+
     t = np.linspace(0, np.pi, num_points)
     x = radius * np.cos(t)
     y = radius * np.sin(t)
@@ -49,23 +42,6 @@ def generate_semi_circle(num_points=10, radius=1.0, z_offset=0.0,
 
 
 def generate_sphere_cluster(center, radius, num_points, distribution='uniform'):
-    """
-    Generuje cluster bodů ve tvaru koule kolem zadaného středu.
-
-    Metoda podporuje dva typy distribuce bodů:
-    1. 'uniform' - body jsou rovnoměrně rozloženy v celém objemu koule
-    2. 'gauss' - body následují normální (Gaussovo) rozložení, kde 99.7% bodů
-       je v rámci zadaného poloměru
-
-    Args:
-        center: numpy.ndarray - Střed koule [x, y, z]
-        radius: float - Poloměr koule
-        num_points: int - Počet bodů, které chceme vygenerovat
-        distribution: str - Typ rozložení bodů ('uniform' nebo 'gauss')
-
-    Returns:
-        numpy.ndarray - Pole bodů tvaru (num_points, 3)
-    """
     center = np.array(center)
 
     if distribution == 'uniform':
@@ -94,11 +70,6 @@ def generate_sphere_cluster(center, radius, num_points, distribution='uniform'):
 
 
 def generate_wild_shape(num_points=10, center=(0, 0, 0)):
-    """
-    Trošku 'divočejší' 3D spirála,
-    zkrácená na interval t ∈ [0, 2π].
-    Navíc posun o vektor center = (cx, cy, cz).
-    """
     t = np.linspace(0, 2 * np.pi, num_points)
     x = t
     y = np.sin(3 * t)
@@ -154,10 +125,7 @@ def generate_spiral_waypoints(num_points=50, dimension=3, spiral_turns=3, noise_
 # --------------------------------------------------
 def generate_poisson_disk_3d(fill_percent=0.3,
                              max_points=2000, max_attempts=200):
-    """
-    V této verzi natvrdo použijeme bounding box = [-20,20]^3.
-    fill_percent => určuje hustotu (čím větší, tím hustší).
-    """
+
     bbox_min = np.array([-20, -20, -20], dtype=float)
     bbox_max = np.array([20, 20, 20], dtype=float)
 
@@ -190,16 +158,7 @@ def generate_poisson_disk_3d(fill_percent=0.3,
 
 
 def generate_sphere_waypoints(center=None):
-    """
-    Generuje jediný bod v prostoru, který bude sloužit jako centrum
-    pro kulový cluster.
 
-    Args:
-        center: Souřadnice bodu v prostoru [x, y, z]
-
-    Returns:
-        numpy.ndarray: Matice s jedním bodem tvaru (1, 3)
-    """
     # Převedeme vstupní seznam na numpy array a přetvarujeme na matici 1x3
     if center is None:
         center = [0, 0, 0]
@@ -218,63 +177,88 @@ def demo_three_curves_in_one_figure():
     cg_ring = ClusterGenerator(waypoints_ring, tension=0.265, cluster_density=60)
     cg_ring.transform_nd_axes([30, 30, 0], [1, 1, 1], [0, 0, 0])
     cg_ring.generate_shape(tension=0.165, distribution='gauss', radius=3)
-    cg_ring.add_scatter_traces(fig, color='blue', name_prefix='Ring')
+    cg_ring.add_scatter_traces(fig, color='blue', name_prefix='Ring',
+                               show_waypoints=False, show_centers=False, show_lines=False)
+
+    # Semi circle cluster
+    waypoints_semi = generate_semi_cirecle(num_points=24, radius=2.0, z_offset=2.0, center=(-5, -2, -10))
+    cg_semi = ClusterGenerator(waypoints_semi, tension=0.165, cluster_density=20)
+    cg_semi.transform_nd_axes([0, 0, 0], [1, 1, 1.1], [-1.5, 0, 0])
+    cg_semi.generate_shape(tension=0.165, distribution='gauss', radius=1.2)
+    cg_semi.add_scatter_traces(fig, color='red', name_prefix='Semi',
+                               show_waypoints=False, show_centers=False, show_lines=False)
 
     # Semi circle cluster
     waypoints_semi = generate_semi_circle(num_points=24, radius=2.0, z_offset=2.0, center=(-5, -2, -10))
     cg_semi = ClusterGenerator(waypoints_semi, tension=0.165, cluster_density=20)
-    cg_semi.transform_nd_axes([0, 0, 0], [1, 1, 1.1], [0, 0, 0])
+    cg_semi.transform_nd_axes([90, 90, 90], [1, 1, 1.1], [2.5, -3.75, -3.75])
     cg_semi.generate_shape(tension=0.165, distribution='gauss', radius=1.2)
-    cg_semi.add_scatter_traces(fig, color='red', name_prefix='Semi')
-
-    # Semi circle cluster
-    waypoints_semi = generate_semi_circle(num_points=24, radius=2.0, z_offset=2.0, center=(-5, -2, -10))
-    cg_semi = ClusterGenerator(waypoints_semi, tension=0.165, cluster_density=20)
-    cg_semi.transform_nd_axes([90, 90, 90], [1, 1, 1.1], [3.5, -3.75, -3.75])
-    cg_semi.generate_shape(tension=0.165, distribution='gauss', radius=1.2)
-    cg_semi.add_scatter_traces(fig, color='brown', name_prefix='Semi')
+    cg_semi.add_scatter_traces(fig, color='brown', name_prefix='Semi',
+                               show_waypoints=False, show_centers=False, show_lines=False)
 
     # Wild shape cluster
-    waypoints_wild = generate_wild_shape(num_points=24, center=(5, -2, 10))
+    waypoints_wild = generate_wild_shape(num_points=24, center=(10, -2, 10))
     cg_wild = ClusterGenerator(waypoints_wild, tension=0.165, cluster_density=30)
     cg_wild.transform_nd_axes([0, 0, 0], [1, 2, 1], [0, 7, -18])
     cg_wild.generate_shape(tension=0.165, distribution='gauss', radius=1)
-    cg_wild.add_scatter_traces(fig, color='green', name_prefix='Wild')
+    cg_wild.add_scatter_traces(fig, color='lightgreen', name_prefix='Wild',
+                               show_waypoints=False, show_centers=False, show_lines=False)
 
     # Wild shape cluster2
     waypoints_wild2 = generate_wild_shape(num_points=24, center=(-10, 12, -10))
     cg_wild2 = ClusterGenerator(waypoints_wild2, tension=0.165, cluster_density=50)
     cg_wild2.transform_nd_axes([45, 45, 45], [1, 1, 1], [0, 0, 0])
     cg_wild2.generate_shape(tension=0.165, distribution='gauss', radius=1)
-    cg_wild2.add_scatter_traces(fig, color='purple', name_prefix='Wild2')
+    cg_wild2.add_scatter_traces(fig, color='purple', name_prefix='Wild2',
+                                show_waypoints=False, show_centers=False, show_lines=False)
 
     # Wild shape cluster3
     waypoints_wild3 = generate_spiral_waypoints(24, 3, 3, 0.2, [10, 3, -4])
     cg_wild3 = ClusterGenerator(waypoints_wild3, tension=0.165, cluster_density=55)
     cg_wild3.transform_nd_axes([0, 30, 0], [0.4, 0.4, 1], [0, 0, 0])
     cg_wild3.generate_shape(tension=0.165, distribution='gauss', radius=2.75)
-    cg_wild3.add_scatter_traces(fig, color='orange', name_prefix='Wild3')
+    cg_wild3.add_scatter_traces(fig, color='orange', name_prefix='Wild3',
+                                show_waypoints=False, show_centers=False, show_lines=False)
 
     # Wild shape cluster4
-    waypoints_wild4 = generate_spiral_waypoints(24, 3, 1, 1, [10, 1, 4])
+    waypoints_wild4 = generate_spiral_waypoints(24, 3, 1, 1, [10, 1, 8])
     cg_wild4 = ClusterGenerator(waypoints_wild4, tension=0.165, cluster_density=35)
     cg_wild4.transform_nd_axes([0, 30, 0], [0.3, 0.3, 1], [1, 1, 0])
     cg_wild4.generate_shape(tension=0.265, distribution='gauss', radius=2)
-    cg_wild4.add_scatter_traces(fig, color='cyan', name_prefix='Wild4')
+    cg_wild4.add_scatter_traces(fig, color='cyan', name_prefix='Wild4',
+                                show_waypoints=False, show_centers=False, show_lines=False)
 
     # Cluster sphere
     waypoints_sphere1 = generate_sphere_waypoints([10, -10, -10])
-    cg_sphere1 = ClusterGenerator(waypoints_sphere1, tension=0.165, cluster_density=500)
+    cg_sphere1 = ClusterGenerator(waypoints_sphere1, tension=0.165, cluster_density=2500)
     cg_sphere1.generate_shape(tension=0.165, distribution='gauss', radius=7)
-    cg_sphere1.transform_nd_axes([0, 0, 0], [1, 1, 1], [0, 0, 0])
-    cg_sphere1.add_scatter_traces(fig, color='black', name_prefix='Sphere1')
+    cg_sphere1.transform_clusters([0, 0, 0], [2, 2, 1], [0, 0, 0])
+    cg_sphere1.add_scatter_traces(fig, color='black', name_prefix='Sphere1',
+                                  show_waypoints=False, show_centers=False, show_lines=False)
 
     # Cluster sphere
     waypoints_sphere2 = generate_sphere_waypoints([-8, -11, 0])
-    cg_sphere2 = ClusterGenerator(waypoints_sphere2, tension=0.165, cluster_density=400)
+    cg_sphere2 = ClusterGenerator(waypoints_sphere2, tension=0.165, cluster_density=800)
     cg_sphere2.generate_shape(tension=0.165, distribution='gauss', radius=4)
     cg_sphere2.transform_clusters([30, 30, 0], [1, 0.5, 1.6], [0, 0, 0])
-    cg_sphere2.add_scatter_traces(fig, color='pink', name_prefix='Sphere1')
+    cg_sphere2.add_scatter_traces(fig, color='pink', name_prefix='Sphere2',
+                                  show_waypoints=False, show_centers=False, show_lines=False)
+
+    # Cluster sphere
+    waypoints_sphere3 = generate_sphere_waypoints([11, 11, 10])
+    cg_sphere3 = ClusterGenerator(waypoints_sphere3, tension=0.165, cluster_density=3800)
+    cg_sphere3.generate_shape(tension=0.165, distribution='gauss', radius=5)
+    cg_sphere3.transform_clusters([0, 0, 45], [2, 1, 2], [0, 0, 0])
+    cg_sphere3.add_scatter_traces(fig, color='yellow', name_prefix='Sphere3',
+                                  show_waypoints=False, show_centers=False, show_lines=False)
+
+    # Cluster sphere
+    waypoints_sphere4 = generate_sphere_waypoints([-10, 10, -10])
+    cg_sphere4 = ClusterGenerator(waypoints_sphere4, tension=0.165, cluster_density=3800)
+    cg_sphere4.generate_shape(tension=0.165, distribution='gauss', radius=4)
+    cg_sphere4.transform_clusters([0, 45, 0], [2, 1, 2], [0, 0, 0])
+    cg_sphere4.add_scatter_traces(fig, color='darkgreen', name_prefix='Sphere4',
+                                  show_waypoints=False, show_centers=False, show_lines=False)
 
     # 3) Generujeme Poisson-disk body pro BOX [-20,20]^3
     fill_percent = 0.9
@@ -295,9 +279,9 @@ def demo_three_curves_in_one_figure():
     ))
 
     fig.update_layout(
-        title=f'Tři různé křivky + Poisson-disk  v BOX [-20,20], fill={fill_percent * 100:.0f}%',
-        width=900,
-        height=800
+        title=f'Různé křivky + Poisson-disk  v BOX [-20,20], fill={fill_percent * 100:.0f}%',
+        width=1920,
+        height=1200
     )
 
     fig.update_layout(
@@ -318,7 +302,5 @@ def demo_three_curves_in_one_figure():
 # --------------------------------------------------
 if __name__ == "__main__":
     # Původní spirála:
-    # demo_string_clusters_constant_spread()
-
     # Nové tři křivky + Poisson-disk [-20,20]^3
     demo_three_curves_in_one_figure()

@@ -181,7 +181,7 @@ def demo_three_curves_in_one_figure():
                                show_waypoints=False, show_centers=False, show_lines=False)
 
     # Semi circle cluster
-    waypoints_semi = generate_semi_cirecle(num_points=24, radius=2.0, z_offset=2.0, center=(-5, -2, -10))
+    waypoints_semi = generate_semi_circle(num_points=24, radius=2.0, z_offset=2.0, center=(-5, -2, -10))
     cg_semi = ClusterGenerator(waypoints_semi, tension=0.165, cluster_density=20)
     cg_semi.transform_nd_axes([0, 0, 0], [1, 1, 1.1], [-1.5, 0, 0])
     cg_semi.generate_shape(tension=0.165, distribution='gauss', radius=1.2)

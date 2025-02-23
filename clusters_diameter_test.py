@@ -194,27 +194,67 @@ def save_datasets(points_dict: Dict,
 
 
 def visualize_config(fig, poisson_points, fill_percent):
-    # Add Poisson-disk points to graph
     fig.add_trace(go.Scatter3d(
         x=poisson_points[:, 0],
         y=poisson_points[:, 1],
         z=poisson_points[:, 2],
         mode='markers',
         marker=dict(size=2, color='gray'),
-        name='Poisson-disk (gray)'
+        name='Poisson-disk-noise (gray)'
     ))
 
-    # Layout settings
     fig.update_layout(
-        title=f'Various curves + Poisson-disk in BOX [-20,20], fill={fill_percent * 100:.0f}%',
-        width=1920,
-        height=1400,
+        # Zmenšíme okraje kolem celé plochy
+        margin=dict(l=20, r=20, t=20, b=20),
+
+        # Titulek grafu
+        # title=f'Various shapes + Poisson-disk in BOX [-20,20], fill={fill_percent * 100:.0f}%',
+        title=dict(
+            text='Sphere clusters + Poisson-disk noise in BOX [-20,20]',
+            x=0.5,
+            y=0.95,
+            xanchor='center',
+            yanchor='top',
+            font = dict(size=20)
+        ),
+
+        # Velikost výstupu
+        width=1200,
+        height=900,
+
+        legend=dict(
+            font=dict(size=16),
+            x=1.0,
+            y=0.0,
+            xanchor='right',
+            yanchor='bottom',
+        ),
+
+        # Nastavení 3D scény
         scene=dict(
+            domain=dict(x=[0.0, 1.0], y=[0.0, 1.0]),
             aspectmode='manual',
             aspectratio=dict(x=1, y=1, z=1),
-            xaxis=dict(range=[-20, 20], title='X'),
-            yaxis=dict(range=[-20, 20], title='Y'),
-            zaxis=dict(range=[-20, 20], title='Z')
+
+            # Nastavení os X, Y, Z
+            xaxis=dict(
+                range=[-20, 20],
+                title='X',
+                titlefont=dict(size=16),
+                tickfont=dict(size=14)
+            ),
+            yaxis=dict(
+                range=[-20, 20],
+                title='Y',
+                titlefont=dict(size=16),
+                tickfont=dict(size=14),
+            ),
+            zaxis=dict(
+                range=[-20, 20],
+                title='Z',
+                titlefont=dict(size=16),
+                tickfont=dict(size=14),
+            )
         )
     )
 
@@ -306,6 +346,7 @@ def sphere_clusters_generator():
         'background': poisson_points,
         'clusters': clusters_data
     }
+
     save_datasets(points_dict, n_dimensions=3)
 
     fig.show()

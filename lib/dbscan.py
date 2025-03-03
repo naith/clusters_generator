@@ -1,119 +1,112 @@
+import numpy as np
+from sklearn.neighbors import BallTree
+
 class DBSCAN:
-    def __init__(self, eps, min_samples):
+    def __init__(self, eps=None, min_samples=5, auto_eps=False, k_distance_k=5):
         """
         Inicializace DBSCAN algoritmu.
 
         Args:
             eps: Maximální vzdálenost mezi dvěma body pro jejich považování za sousedy
             min_samples: Minimální počet bodů potřebných k vytvoření clusteru
+            auto_eps: Automatický výpočet `eps` pomocí k-distance heuristiky
+            k_distance_k: Počet sousedů pro k-distance (pokud `auto_eps=True`)
         """
         self.eps = eps
         self.min_samples = min_samples
+        self.auto_eps = auto_eps
+        self.k_distance_k = k_distance_k
         self.labels_ = None
 
-    def _euclidean_distance(self, point1, point2):
+    def _region_query(self, X, tree, point_idx):
         """
-        Výpočet Euklidovské vzdálenosti mezi dvěma body.
-
-        Args:
-            point1: První bod
-            point2: Druhý bod
-
-        Returns:
-            float: Vzdálenost mezi body
-        """
-        squared_dist = 0
-        for i in range(len(point1)):
-            squared_dist += (point1[i] - point2[i]) ** 2
-        return squared_dist ** 0.5
-
-    def _region_query(self, X, point_idx):
-        """
-        Nalezení všech bodů v okolí daného bodu.
+        Najde všechny sousedy bodu v okruhu `eps` pomocí BallTree.
 
         Args:
             X: Dataset
-            point_idx: Index zkoumaného bodu
+            tree: BallTree instance pro efektivní vyhledávání
+            point_idx: Index bodu
 
         Returns:
-            list: Seznam indexů sousedních bodů
+            list: Indexy sousedních bodů
         """
-        neighbors = []
-        for i in range(len(X)):
-            if self._euclidean_distance(X[point_idx], X[i]) <= self.eps:
-                neighbors.append(i)
-        return neighbors
+        return tree.query_radius(X[point_idx].reshape(1, -1), r=self.eps)[0].tolist()
 
-    def _expand_cluster(self, X, labels, point_idx, neighbors, cluster_id):
+    def _expand_cluster(self, X, tree, labels, point_idx, neighbors, cluster_id):
         """
-        Rozšíření clusteru o další body.
+        Rozšíří cluster o nové body.
 
         Args:
             X: Dataset
+            tree: BallTree instance
             labels: Pole labelů
-            point_idx: Index aktuálního bodu
+            point_idx: Index bodu
             neighbors: Seznam sousedů
-            cluster_id: ID aktuálního clusteru
+            cluster_id: ID clusteru
         """
         labels[point_idx] = cluster_id
-        queue = list(neighbors)
+        queue = set(neighbors)  # Používáme množinu pro efektivitu
 
         while queue:
-            neighbor_idx = queue.pop(0)
-            if labels[neighbor_idx] == -1:  # noise
+            neighbor_idx = queue.pop()
+            if labels[neighbor_idx] == -1:  # noise → přidat do clusteru
                 labels[neighbor_idx] = cluster_id
-            elif labels[neighbor_idx] == 0:  # unvisited
+            elif labels[neighbor_idx] == 0:  # unvisited → expandovat
                 labels[neighbor_idx] = cluster_id
-                new_neighbors = self._region_query(X, neighbor_idx)
+                new_neighbors = self._region_query(X, tree, neighbor_idx)
                 if len(new_neighbors) >= self.min_samples:
-                    queue.extend(new_neighbors)
+                    queue.update(new_neighbors)  # Přidáme nové sousedy
 
     def _k_distance(self, X, k):
         """
-        Výpočet k-distance pro všechny body.
+        Automatický výpočet `eps` pomocí k-distance heuristiky.
 
         Args:
             X: Dataset
             k: Počet sousedů
 
         Returns:
-            list: Seřazené k-distance pro všechny body
+            float: Doporučené `eps`
         """
-        distances = []
-        for i in range(len(X)):
-            dist_to_point = []
-            for j in range(len(X)):
-                if i != j:
-                    dist = self._euclidean_distance(X[i], X[j])
-                    dist_to_point.append(dist)
-            dist_to_point.sort()
-            distances.append(dist_to_point[k - 1])
-        distances.sort()
-        return distances
+        tree = BallTree(X)
+        distances, _ = tree.query(X, k=k + 1)  # k+1, protože první soused je bod samotný
+        k_distances = np.sort(distances[:, -1])  # k-tá nejbližší vzdálenost
+
+        # Automatická volba eps na základě největšího skoku (koleno křivky)
+        diffs = np.diff(k_distances)
+        eps_auto = k_distances[np.argmax(diffs) + 1]
+        return eps_auto
 
     def fit(self, X):
         """
-        Provedení DBSCAN clustering algoritmu.
+        Provede DBSCAN clustering.
 
         Args:
-            X: Dataset pro clustering
+            X: Dataset
 
         Returns:
-            array: Pole labelů clusterů
+            list: Labely clusterů pro každý bod
         """
-        self.labels_ = [0] * len(X)  # 0 = unvisited, -1 = noise
+        n = len(X)
+        self.labels_ = np.zeros(n, dtype=int)  # 0 = unvisited, -1 = noise
+        tree = BallTree(X)
+
+        # Automatický výpočet `eps`, pokud není zadáno
+        if self.auto_eps or self.eps is None:
+            self.eps = self._k_distance(X, self.k_distance_k)
+
         cluster_id = 0
 
-        for point_idx in range(len(X)):
+        for point_idx in range(n):
             if self.labels_[point_idx] != 0:  # skip visited points
                 continue
 
-            neighbors = self._region_query(X, point_idx)
+            neighbors = self._region_query(X, tree, point_idx)
 
             if len(neighbors) < self.min_samples:
-                self.labels_[point_idx] = -1  # mark as noise
+                self.labels_[point_idx] = -1  # označení jako šum
             else:
                 cluster_id += 1
-                self._expand_cluster(X, self.labels_, point_idx, neighbors, cluster_id)
+                self._expand_cluster(X, tree, self.labels_, point_idx, neighbors, cluster_id)
 
         return self.labels_

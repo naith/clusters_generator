@@ -1,82 +1,33 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-import math
-
-
-def euclidean_distance(a, b):
-    """
-    Euklidovská vzdálenost mezi dvěma body libovolné dimenze.
-    a, b: iterovatelné (x1, x2, ..., xN)
-    """
-    return math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b)))
-
+import numpy as np
+from sklearn.neighbors import BallTree
+import heapq
 
 def compute_core_distances(data, min_points):
     """
-    Pro každý bod spočítá 'core distance' = vzdálenost k min_points-tému
-    nejbližšímu sousedovi. (Zjednodušená verze HDBSCAN.)
-
-    data: list bodů (každý bod je např. tuple/list souřadnic [x1, x2, ... , xN])
-    min_points: např. 5 (podobné parametru min_samples v HDBSCAN)
-
-    Vrací list core_distance pro každý bod.
+    Spočítá core distance pro každý bod pomocí k-nejbližších sousedů.
+    Používá BallTree pro efektivní dotazy (rychlejší než O(n²)).
     """
-    n = len(data)
-    core_distances = [0.0] * n
+    tree = BallTree(data)
+    dists, _ = tree.query(data, k=min_points + 1)  # Min_points + 1, protože první je bod samotný
+    return dists[:, -1]  # Min_points-tý nejbližší soused
 
-    for i in range(n):
-        dists = []
-        for j in range(n):
-            if i == j:
-                continue
-            d = euclidean_distance(data[i], data[j])
-            dists.append(d)
-        dists.sort()
-        # core distance je vzdálenost k (min_points)-tému nejbližšímu bodu
-        # (pozor, index v poli je min_points-1)
-        if len(dists) >= min_points:
-            core_distances[i] = dists[min_points - 1]
-        else:
-            # Pokud je bod extrémně izolovaný (méně bodů než min_points),
-            # můžeme core_distance nastavit na max nebo něco "velkého".
-            core_distances[i] = float('inf')
-
-    return core_distances
-
-
-def build_mst(data, core_dists):
+def build_knn_edges(data, core_dists, k=10):
     """
-    Vygeneruje všechny hrany (i,j) a přiřadí jim "reachability distance"
-    = max(core_dists[i], d(i,j), core_dists[j]).
-
-    Následně vrací setříděný seznam hran (rdist, i, j).
-
-    data: list bodů
-    core_dists: list core vzdáleností
+    Vytvoří k-nejbližší sousedy graf pro rychlejší běh HDBSCAN.
     """
+    tree = BallTree(data)
+    dists, indices = tree.query(data, k=k + 1)  # První bod je sám sebe, ignorujeme ho
     edges = []
-    n = len(data)
-
-    # O(n^2) přístup: pro malé n to postačuje.
-    for i in range(n):
-        for j in range(i + 1, n):
-            d = euclidean_distance(data[i], data[j])
-            rd = max(core_dists[i], d, core_dists[j])
-            edges.append((rd, i, j))
-
-    # Seřadit vzestupně podle reachability distance
-    edges.sort(key=lambda x: x[0])
+    for i in range(len(data)):
+        for j in range(1, k + 1):  # Ignorujeme první (vlastní bod)
+            rd = max(core_dists[i], dists[i, j], core_dists[indices[i, j]])
+            edges.append((rd, i, indices[i, j]))
+    edges.sort(key=lambda x: x[0])  # Seřadíme podle reachability distance
     return edges
-
 
 def kruskal_mst(edges, n):
     """
-    Klasický Kruskalův algoritmus pro stavbu minimální kostry (MST).
-    edges: setříděné hrany (dist, i, j)
-    n: počet vrcholů (bodů)
-
-    Vrací list hran, které tvoří MST (tedy n-1 hran).
+    Kruskalův algoritmus na vytvoření minimálního spojovacího stromu (MST).
     """
     parent = list(range(n))
     rank = [0] * n
@@ -87,8 +38,7 @@ def kruskal_mst(edges, n):
         return parent[x]
 
     def union(x, y):
-        rx = find(x)
-        ry = find(y)
+        rx, ry = find(x), find(y)
         if rx != ry:
             if rank[rx] < rank[ry]:
                 parent[rx] = ry
@@ -108,113 +58,71 @@ def kruskal_mst(edges, n):
             break
     return mst
 
-
-def get_clusters_from_condensed_tree(mst, min_points, min_cluster_size):
+def get_clusters_from_mst(mst, min_cluster_size):
     """
-    Zjednodušený mechanismus pro zisk klastrů z MST tak, že "odřezáváme" hrany
-    od nejdelších k nejkratším (či naopak) a sledujeme komponenty.
-
-    Real HDBSCAN pracuje s "condensed tree" a stabilitou klastrů, tady
-    je to velmi zjednodušené kvůli demonstraci.
-
-    Vrací list labelů pro každý bod (0,1,2,...) nebo -1 pro šum.
+    Extrahuje clustery z MST ořezáváním nejdelších hran.
     """
-    if not mst:
-        return []
-
-    # z MST zjistíme počet vrcholů
     n = max(max(e[1], e[2]) for e in mst) + 1
+    parent = list(range(n))
 
-    # Seřadíme hrany v MST sestupně (od největší distance k nejmenší)
+    def find(x):
+        if parent[x] != x:
+            parent[x] = find(parent[x])
+        return parent[x]
+
+    def union(x, y):
+        rx, ry = find(x), find(y)
+        if rx != ry:
+            parent[ry] = rx
+            return True
+        return False
+
+    # Seřazení MST sestupně podle vzdálenosti
     sorted_mst = sorted(mst, key=lambda x: x[0], reverse=True)
 
-    # Místo "rozpojování" si vybudujeme union-find od nuly
-    # a budeme hrany přidávat od nejmenší k největší (což je
-    # opačný postup, ale výsledek je stejný).
-    edges_asc = list(reversed(sorted_mst))  # tedy od nejmenší vzdálenosti k největší
+    # Inicializace labelů
+    labels = [-1] * n
 
-    parent2 = list(range(n))
-    rank2 = [0] * n
+    # Průchod MST a postupné "řezání" hran
+    cluster_id = 0
+    for dist, i, j in sorted_mst:
+        if dist > np.percentile([e[0] for e in sorted_mst], 90):  # Řežeme nejdelší 10% hran
+            continue
+        union(i, j)
 
-    def find2(x):
-        if parent2[x] != x:
-            parent2[x] = find2(parent2[x])
-        return parent2[x]
-
-    def union2(x, y):
-        rx = find2(x)
-        ry = find2(y)
-        if rx != ry:
-            if rank2[rx] < rank2[ry]:
-                parent2[rx] = ry
-            elif rank2[rx] > rank2[ry]:
-                parent2[ry] = rx
-            else:
-                parent2[ry] = rx
-                rank2[rx] += 1
-
-    clusters_final = [None] * n
-
-    # Procházíme hrany od nejmenší k největší, přidáváme je
-    # a zjišťujeme, kdy vznikají větší komponenty.
-    for dist, i, j in edges_asc:
-        union2(i, j)
-
-        # Vytvoříme mapu root -> seznam vrcholů
-        comp_map = {}
-        for node in range(n):
-            r = find2(node)
-            comp_map.setdefault(r, []).append(node)
-
-        # Když některá komponenta dosáhne velikosti >= min_cluster_size,
-        # přiřadíme jí "cluster ID" (zde root).
-        for root, members in comp_map.items():
-            if len(members) >= min_cluster_size:
-                # label = root (nebo nějaký jiný identifikátor)
-                for m in members:
-                    if clusters_final[m] is None:
-                        clusters_final[m] = root
-
-    # Zbylé body, které nikdy nebyly v dost velké komponentě, označíme -1
+    # Mapování bodů na jejich komponenty
+    cluster_map = {}
     for i in range(n):
-        if clusters_final[i] is None:
-            clusters_final[i] = -1
+        root = find(i)
+        cluster_map.setdefault(root, []).append(i)
 
-    return clusters_final
+    # Pouze velké komponenty jsou clustery
+    for root, members in cluster_map.items():
+        if len(members) >= min_cluster_size:
+            for m in members:
+                labels[m] = cluster_id
+            cluster_id += 1
 
+    return labels
 
-def hdbscan(data, min_points=5, min_cluster_size=5):
+def hdbscan(data, min_points=5, min_cluster_size=5, k=10):
     """
-    Zjednodušená (didaktická) verze HDBSCAN pro n-dim data:
-      1) Spočítá core distance (vzdálenost k min_points-tému nejbližšímu bodu).
-      2) Postaví hrany s reachability distance = max(core_i, d(i,j), core_j).
-      3) Zkonstruuje MST (Kruskal).
-      4) Ze zjednodušeného "condensed tree" (z MST) vybere klastery
-         (podle min_cluster_size).
-
-    Vrací list labelů (0,1,2,...) nebo -1 pro šum.
+    Zlepšená verze HDBSCAN:
+      1) Používá BallTree pro výpočet core distances.
+      2) Staví k-nejbližší sousedy graf místo plného grafu.
+      3) Používá Kruskalův algoritmus k vytvoření MST.
+      4) Extrahuje clustery z MST ořezáním nejdelších hran.
     """
     # 1) Spočítáme core distance
     core_dists = compute_core_distances(data, min_points)
 
-    # 2) Vygenerujeme hrany a setřídíme (reachability distance)
-    edges = build_mst(data, core_dists)
+    # 2) Vygenerujeme graf k-nejbližších sousedů
+    edges = build_knn_edges(data, core_dists, k=k)
 
     # 3) Postavíme MST
     mst = kruskal_mst(edges, len(data))
 
-    # 4) Získáme clustery
-    labels = get_clusters_from_condensed_tree(mst, min_points, min_cluster_size)
+    # 4) Extrahujeme clustery
+    labels = get_clusters_from_mst(mst, min_cluster_size)
 
     return labels
-
-
-# if __name__ == "__main__":
-#     # Jednoduchý test pro 2D data
-#     data_2d = [
-#         (0, 0), (1, 0), (0, 1), (1, 1),  # cluster 1
-#         (10, 10), (10, 11), (11, 10),  # cluster 2
-#         (50, 50)  # izolovaný bod
-#     ]
-#     labels_2d = hdbscan(data_2d, min_points=2, min_cluster_size=2)
-#     print("Test na 2D datech:", labels_2d)

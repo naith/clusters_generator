@@ -107,7 +107,7 @@ class ClusterGenerator:
                 mode='lines+markers',
                 marker=dict(size=2, color=color),
                 line=dict(width=2, color=color),
-                name=f'{name_prefix} Křivka (centra)'
+                name=f'{name_prefix} Curve (centers)'
             ))
 
         if show_clusters:
@@ -117,25 +117,25 @@ class ClusterGenerator:
                 z=self.clusters[:, 2],
                 mode='markers',
                 marker=dict(size=2, color=color, opacity=1),
-                name=f'{name_prefix} Clustery'
+                name=f'{name_prefix} Clusters'
             ))
 
     def transform_nd_axes(self, angles, scales, translation):
 
         if self.waypoints.ndim != 2:
-            raise ValueError("Param 'points' musí být 2D matice (N, n).")
+            raise ValueError("Param 'Points' must be a 2D nut (n, n).")
         n = self.waypoints.shape[1]
 
         if len(angles) != n:
-            raise ValueError(f"Počet úhlů ({len(angles)}) != n={n}.")
+            raise ValueError(f"Number of angles ({len(angles)}) != n={n}.")
         if len(scales) != n:
-            raise ValueError(f"Počet škálovacích faktorů ({len(scales)}) != n={n}.")
+            raise ValueError(f"Number of scaling factors ({len(scales)}) != n={n}.")
         if len(translation) != n:
-            raise ValueError(f"Počet složek translace ({len(translation)}) != n={n}.")
+            raise ValueError(f"The number of translation components ({len(translation)}) != n={n}.")
 
         if n < 3:
             raise ValueError(
-                "Pro n < 3 nedává smysl 'osa-based' rotace.")
+                "It makes no sense for n <3.")
 
         new_points = np.copy(self.waypoints)
 
@@ -169,25 +169,25 @@ class ClusterGenerator:
     def transform_clusters(self, rotations, scales, translation):
 
         if self.clusters is None or self.centers is None:
-            raise ValueError("Nejprve musíte vygenerovat cluster pomocí generate_shape")
+            raise ValueError("You must generate cluster using Generate_Shape first")
 
         n = self.clusters.shape[1]
 
-        # Kontrola vstupních parametrů
+        # Checking input parameters
         if len(rotations) != n or len(scales) != n or len(translation) != n:
-            raise ValueError(f"Všechny transformační parametry musí mít délku {n}")
+            raise ValueError(f"All transformation parameters must have a length {n}")
 
-        # Použijeme známé centrum clusteru
+        # We will use the well -known cluster center
         center = self.centers[0]  # Pro jeden cluster máme jedno centrum
 
-        # Posuneme cluster do počátku souřadnic vzhledem ke známému centru
+        # We move cluster to the beginning of coordinates with respect to the known center
         points = self.clusters - center
 
-        # Aplikujeme škálování
+        # We apply scaling
         S = np.diag(scales)
         points = points @ S
 
-        # Aplikujeme rotace
+        # We apply rotations
         for axis in range(n):
             if rotations[axis] == 0:
                 continue
@@ -209,10 +209,10 @@ class ClusterGenerator:
 
             points = points @ R
 
-        # Vrátíme cluster na původní pozici
+        # We will return the cluster to the original position
         points = points + center
 
-        # Aplikujeme dodatečnou translaci
+        # Apply an additional translation
         points = points + translation
 
         self.clusters = points

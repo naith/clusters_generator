@@ -410,33 +410,34 @@ def visualize_config(fig, poisson_points, fill_percent):
         z=poisson_points[:, 2],
         mode='markers',
         marker=dict(size=2, color='gray'),
-        name='Poisson-disk (gray)'
+        name='Poisson-disk-noise (gray)'
     ))
 
     fig.update_layout(
         # Zmenšíme okraje kolem celé plochy
-        margin=dict(l=20, r=20, t=20, b=20),
+        margin=dict(l=24, r=24, t=24, b=24),
 
         # Titulek grafu
         # title=f'Various shapes + Poisson-disk in BOX [-20,20], fill={fill_percent * 100:.0f}%',
         title=dict(
-            text='Various shapes + Poisson-disk in BOX [-20,20]',
-            x=0.5,  # zarovnat na střed
-            y=0.95,  # snížit či zvýšit (1.0 = úplně nahoře, menší => níž)
+            text='Multishapes clusters + Poisson-disk noise in BOX [-20,20]',
+            x=0.5,
+            y=0.95,
             xanchor='center',
             yanchor='top',
-            font = dict(size=20)
+            font = dict(size=40)
         ),
 
         # Velikost výstupu
         width=1200,
         height=900,
+
         legend=dict(
-            font=dict(size=16),  # zvolte si velikost písma
-            x=1.0,  # vodorovná pozice (0 = vlevo, 1 = vpravo)
-            y=0.0,  # svislá pozice (0 = dole, 1 = nahoře)
-            xanchor='right',  # ukotvení legendy ve vodorovném směru (k pravému okraji)
-            yanchor='bottom',  # ukotvení legendy ve svislém směru (k dolnímu okraji)
+            font=dict(size=20),
+            x=1.0,
+            y=0.0,
+            xanchor='right',
+            yanchor='bottom',
         ),
 
         # Nastavení 3D scény
@@ -449,20 +450,20 @@ def visualize_config(fig, poisson_points, fill_percent):
             xaxis=dict(
                 range=[-20, 20],
                 title='X',
-                titlefont=dict(size=16),  # <--- menší standoff = bližší label
-                tickfont=dict(size=14)  # (volitelně menší font)
+                titlefont=dict(size=24),
+                tickfont=dict(size=18)
             ),
             yaxis=dict(
                 range=[-20, 20],
                 title='Y',
-                titlefont=dict(size=16),  # <--- menší standoff = bližší label
-                tickfont=dict(size=14),
+                titlefont=dict(size=24),
+                tickfont=dict(size=18),
             ),
             zaxis=dict(
                 range=[-20, 20],
                 title='Z',
-                titlefont=dict(size=16),  # <--- menší standoff = bližší label
-                tickfont=dict(size=14),
+                titlefont=dict(size=24),
+                tickfont=dict(size=18),
             )
         )
     )

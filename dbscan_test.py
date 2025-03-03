@@ -1,8 +1,9 @@
 import numpy as np
 import pandas as pd
 import plotly.express as px
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from lib.dbscan import DBSCAN
+
 
 def generate_test_data(n_points: int = 100, n_dims: int = 2) -> List[List[float]]:
     """
@@ -84,9 +85,71 @@ def save_results(X: List[List[float]], labels: List[int], filename: str = 'dbsca
     for i in range(X_np.shape[1]):
         df[f'dim_{i + 1}'] = X_np[:, i]
 
-    df['cluster'] = labels
+    # Přidání výsledků clusteringu
+    df['point_type'] = ['noise' if l == -1 else 'cluster' for l in labels]
+    df['cluster_id'] = labels
+
     df.to_csv(filename, index=False)
     print(f"Výsledky byly uloženy do {filename}")
+
+
+def load_and_process_csv(csv_file_path: str, eps: float = 1.5, min_samples: int = 5) -> Optional[
+    Tuple[List[List[float]], List[int]]]:
+    """
+    Načte data z CSV souboru, ignoruje poslední dva sloupce a spustí DBSCAN.
+
+    Args:
+        csv_file_path: Cesta k CSV souboru
+        eps: Parametr epsilon pro DBSCAN
+        min_samples: Minimální počet vzorků pro DBSCAN
+
+    Returns:
+        Tuple obsahující dataset a výsledky clusteringu, nebo None při chybě
+    """
+    try:
+        # Načtení dat z CSV
+        print(f"Načítám data z: {csv_file_path}")
+        data = pd.read_csv(csv_file_path)
+
+        # Kontrola datových typů
+        print("Datové typy sloupců:")
+        print(data.dtypes)
+
+        # Identifikace sloupců dimenzí
+        dimension_cols = [col for col in data.columns if col.startswith('dim_')]
+
+        if not dimension_cols:
+            # Pokud nebyly nalezeny sloupce s prefixem 'dim_', použijeme všechny sloupce kromě posledních dvou
+            X_df = data.iloc[:, :-2]
+            dimension_cols = X_df.columns.tolist()
+        else:
+            # Jinak použijeme pouze nalezené sloupce dimenzí
+            X_df = data[dimension_cols]
+
+        # Převod na list of lists
+        X = X_df.values.astype(float).tolist()
+
+        print(f"Používám {len(dimension_cols)} dimenzí pro analýzu, ignoruji poslední dva sloupce.")
+        print(f"Počet bodů: {len(X)}")
+
+        # Spuštění DBSCAN
+        print(f"Spouštím DBSCAN s parametry eps={eps}, min_samples={min_samples}...")
+        dbscan = DBSCAN(eps=eps, min_samples=min_samples)
+        labels = dbscan.fit(X)
+
+        # Výpis základních statistik
+        unique_labels = set(labels)
+        n_clusters = len([l for l in unique_labels if l >= 0])
+        n_noise = labels.count(-1)
+
+        print(f"Počet nalezených clusterů: {n_clusters}")
+        print(f"Počet bodů označených jako šum: {n_noise}")
+
+        return X, labels
+
+    except Exception as e:
+        print(f"Chyba při zpracování CSV souboru: {e}")
+        return None
 
 
 def main():
@@ -148,6 +211,33 @@ def main():
     # Uložení 3D výsledků
     save_results(X_3d, labels_3d, 'dbscan_results_3d.csv')
 
+    # Test pro načítání z CSV
+    print("\nTest načítání z CSV souboru:")
+    print("-" * 50)
+
+    # Pro testování odkomentujte následující řádky a upravte cestu k CSV souboru
+    # csv_file_path = "cesta/k/vasemu/souboru.csv"
+    # result = load_and_process_csv(csv_file_path, eps=1.5, min_samples=5)
+    #
+    # if result:
+    #     X_csv, labels_csv = result
+    #     print("Vizualizace výsledků z CSV...")
+    #     visualize_clusters(X_csv, labels_csv)
+    #     save_results(X_csv, labels_csv, 'dbscan_results_from_csv.csv')
+
 
 if __name__ == "__main__":
-    main()
+    # Můžete zvolit jednu z následujících možností:
+
+    # 1. Spuštění původní demo funkce
+    # main()
+
+    # 2. Zpracování konkrétního CSV souboru
+    csv_file_path = "shapes/shapes_dataset.csv"  # Upravte podle potřeby
+    result = load_and_process_csv(csv_file_path, eps=1.5, min_samples=5)
+    #
+    if result:
+         X_csv, labels_csv = result
+         print("Vizualizace výsledků z CSV...")
+         visualize_clusters(X_csv, labels_csv)
+         save_results(X_csv, labels_csv, 'dbscan_results_from_csv.csv')

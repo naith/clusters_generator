@@ -1,0 +1,26 @@
+dbscan: 29
+Scoring algorithm:          | Gaussian | String | Ring | Multiple |
+Silhouette score:           | 0.3818 | 0.7205 | 0.0396 | 0.4515 |
+Calinski-Harabasz index:    | 3523.9046 | 7607.2552 | 1028.2285 | 14748.6330 |
+Davies-Bouldin index:       | 0.6829 | 0.4445 | 1.0138 | 0.6956 |
+
+hdbscan: 3
+Scoring algorithm:          | Gaussian | String | Ring | Multiple |
+Silhouette score:           | 0.5182 | 0.2416 | 0.2739 | 0.6143 |
+Calinski-Harabasz index:    | 8679.5410 | 15.2050 | 2047.9232 | 15241.0610 |
+Davies-Bouldin index:       | 0.5488 | 0.7840 | 1.0423 | 0.5145 |
+
+Optic: 38
+Scoring algorithm:          | Gaussian | String | Rings | Multiple
+Silhouette score:           | 0.3616 | 0.5438 | -0.2088 | 0.3132 |
+Calinski-Harabasz index:    | 3895.7048 | 5481.9401 | 359.1668 | 6936.7727 |
+Davies-Bouldin index:       | 0.6799 | 0.5199 | 1.4782 | 0.7144 |
+
+Spactral: 6
+Scoring algorithm:          | Gaussian | String | Ring | Multiple |
+Silhouette score:           | 0.1688 | 0.1655 | 0.2430 | 0.1318 |
+Calinski-Harabasz index:    | 310.3760 | 8.6518 | 17.6050 | 3.7269 |
+Davies-Bouldin index:       | 19.4747 | 20.0328 | 16.6555 | 25.3006 |
+
+
+Spekt

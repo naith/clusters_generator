@@ -1,165 +1,110 @@
 import numpy as np
-
-
-def compute_full_affinity(X, sigma=1.0):
-    """
-    Spočítá plnou Gaussovskou afinitní matici (každý bod s každým).
-    """
-    n = X.shape[0]
-    W = np.zeros((n, n))
-    for i in range(n):
-        for j in range(n):
-            if i == j:
-                continue
-            diff = X[i] - X[j]
-            dist_sq = np.dot(diff, diff)
-            W[i, j] = np.exp(-dist_sq / (2.0 * sigma ** 2))
-    return W
+import scipy.sparse as sp
+from scipy.sparse.linalg import lobpcg
+from sklearn.neighbors import NearestNeighbors
 
 
 def compute_knn_affinity(X, k=10, sigma=1.0):
     """
-    Vytvoří řídkou k-NN Gaussovskou matici sousednosti:
-      - Pro každý bod i najde k nejbližších sousedů
-      - Pouze těm přiřadí váhu exp(-dist^2 / (2*sigma^2))
-      - Výsledná matice W je pak symetrizovaná: W = max(W, W.T)
+    Vytvoří řídkou k-NN Gaussovskou afinitní matici.
+    """
+    nn = NearestNeighbors(n_neighbors=k + 1, metric="euclidean").fit(X)
+    distances, indices = nn.kneighbors(X)
+
+    W = sp.lil_matrix((X.shape[0], X.shape[0]))
+    for i in range(X.shape[0]):
+        for j in range(1, k + 1):  # Ignorujeme první (je to bod samotný)
+            dist_sq = distances[i, j] ** 2
+            W[i, indices[i, j]] = np.exp(-dist_sq / (2.0 * sigma ** 2))
+
+    return W.maximum(W.T).tocsr()  # Symetrizace
+
+
+def compute_full_affinity(X, sigma=1.0):
+    """
+    Spočítá plnou Gaussovskou afinitní matici s řídkým uložením.
     """
     n = X.shape[0]
-    W = np.zeros((n, n))
-
-    for i in range(n):
-        # Vzdálenosti od bodu i ke všem ostatním
-        distances = []
-        for j in range(n):
-            if i == j:
-                continue
-            diff = X[i] - X[j]
-            dist_sq = np.dot(diff, diff)
-            distances.append((dist_sq, j))
-
-        # Seřadíme podle dist_sq a vybereme k nejmenších
-        distances.sort(key=lambda x: x[0])
-        neighbors = distances[:k]
-
-        # Přiřadíme Gaussovské váhy
-        for dist_sq, j in neighbors:
-            W[i, j] = np.exp(-dist_sq / (2.0 * sigma ** 2))
-
-    # Symetrizace (volba max pro nerozšířený k-NN graf)
-    W = np.maximum(W, W.T)
-    return W
+    dist_sq = np.sum(X ** 2, axis=1, keepdims=True) - 2 * np.dot(X, X.T) + np.sum(X ** 2, axis=1)
+    W = np.exp(-dist_sq / (2.0 * sigma ** 2))
+    np.fill_diagonal(W, 0)  # Odstraníme vlastní vazby
+    return sp.csr_matrix(W)  # Řídká matice
 
 
 def compute_normalized_laplacian(W):
     """
-    Symetrický normalizovaný Laplacian:
-       L_sym = D^{-1/2} (D - W) D^{-1/2}.
-    Kde D je diagonální matice stupňů (součet řádků W).
+    Vypočítá symetrický normalizovaný Laplacian: L_sym = D^{-1/2} (D - W) D^{-1/2}.
     """
-    d = np.sum(W, axis=1)  # stupně (degree)
-    # Ochrana proti dělení nulou (když by některý vrchol neměl sousedy)
-    d_sqrt_inv = 1.0 / np.sqrt(d + 1e-9)
-    D_inv_sqrt = np.diag(d_sqrt_inv)
+    d = np.array(W.sum(axis=1)).flatten()
+    d_inv_sqrt = np.where(d > 0, 1.0 / np.sqrt(d), 0)
+    D_inv_sqrt = sp.diags(d_inv_sqrt)
 
-    L = np.diag(d) - W
-    L_sym = D_inv_sqrt @ L @ D_inv_sqrt
-    return L_sym
+    L = sp.eye(W.shape[0]) - D_inv_sqrt @ W @ D_inv_sqrt
+    return L
 
 
 def compute_unnormalized_laplacian(W):
     """
-    Nenormalizovaný Laplacian L = D - W.
+    Nenormalizovaný Laplacian: L = D - W.
     """
-    d = np.sum(W, axis=1)
-    D = np.diag(d)
-    L = D - W
-    return L
+    d = np.array(W.sum(axis=1)).flatten()
+    D = sp.diags(d)
+    return D - W
 
 
 def my_kmeans(X, k, max_iters=100, tol=1e-4):
     """
-    Jednoduchá implementace k-means.
+    k-means s inicializací k-means++.
     """
     n, d = X.shape
-    indices = np.random.choice(n, k, replace=False)
-    centers = X[indices, :]
+    centers = X[np.random.choice(n, 1)]  # První centroid
+    for _ in range(k - 1):
+        dists = np.min(np.linalg.norm(X[:, None] - centers, axis=2), axis=1)
+        probs = dists ** 2 / np.sum(dists ** 2)
+        new_center = X[np.random.choice(n, p=probs)]
+        centers = np.vstack([centers, new_center])
+
     labels = np.zeros(n, dtype=int)
-
     for _ in range(max_iters):
-        # 1) Přiřazení
-        for i in range(n):
-            dist_sq = np.sum((X[i] - centers) ** 2, axis=1)
-            labels[i] = np.argmin(dist_sq)
+        dist_sq = np.linalg.norm(X[:, None] - centers, axis=2) ** 2
+        labels = np.argmin(dist_sq, axis=1)
 
-        # 2) Přepočítání center
-        new_centers = np.zeros((k, d))
-        counts = np.zeros(k, dtype=int)
-        for i in range(n):
-            new_centers[labels[i]] += X[i]
-            counts[labels[i]] += 1
-        for c in range(k):
-            if counts[c] > 0:
-                new_centers[c] /= counts[c]
-            else:
-                # Pokud by některý cluster zůstal prázdný,
-                # náhodně ho znovu inicializujeme
-                new_centers[c] = X[np.random.randint(0, n)]
-
-        # 3) Kontrola posunu
-        shift = np.sum((centers - new_centers) ** 2)
-        centers = new_centers
-        if shift < tol:
+        new_centers = np.array([X[labels == i].mean(axis=0) if np.any(labels == i) else centers[i] for i in range(k)])
+        if np.sum((centers - new_centers) ** 2) < tol:
             break
+        centers = new_centers
 
     return labels, centers
 
 
-def spectral_clustering(
-        X,
-        k,
-        sigma=1.0,
-        use_knn=False,
-        knn_k=10,
-        normalized=True,
-        max_iters=100,
-        tol=1e-4
-):
+def spectral_clustering(X, k, sigma=1.0, use_knn=True, knn_k=10, normalized=True):
     """
-    Vylepšený Spectral Clustering, který umí:
-      - buď plnou Gaussovskou matici sousednosti, nebo k-NN
-      - volitelně normalizovaný / nenormalizovaný Laplacian
-
-    Parametry:
-      - X: [n, d] vstupní data
-      - k: počet shluků
-      - sigma: parametr pro Gaussovskou váhu
-      - use_knn: pokud True, použije se k-NN graf
-      - knn_k: počet sousedů pro k-NN (pokud use_knn=True)
-      - normalized: pokud True, použije se symetrický normalizovaný Laplacian
-      - max_iters, tol: parametry pro k-means
-
-    Návrat:
-      - labels: pole [n], přiřazení clusterů ke každému bodu
+    Rychlá verze Spectral Clusteringu s řídkými maticemi a optimalizovaným výpočtem vlastních vektorů.
     """
-    # 1) Afinitní matice
+    # 1) k-NN afinitní matice nebo plná afinitní matice
     if use_knn:
         W = compute_knn_affinity(X, k=knn_k, sigma=sigma)
     else:
         W = compute_full_affinity(X, sigma=sigma)
 
-    # 2) Laplacian
-    if normalized:
-        L = compute_normalized_laplacian(W)
-    else:
-        L = compute_unnormalized_laplacian(W)
+    # 2) Kontrola W
+    print(f"Nejmenší hodnota W: {W.min()}, Největší hodnota W: {W.max()}")
+    print(f"Počet nenulových hodnot v W: {W.nnz}")
 
-    # 3) Najít k nejmenších vlastních čísel a vektory
-    vals, vecs = np.linalg.eigh(L)
-    idx_sorted = np.argsort(vals)
-    idx_k = idx_sorted[:k]
-    U = vecs[:, idx_k]  # [n, k]
+    # 3) Normalizovaný Laplacian
+    L = compute_normalized_laplacian(W) if normalized else compute_unnormalized_laplacian(W)
 
-    # 4) k-means nad řádky U
-    labels, _ = my_kmeans(U, k, max_iters=max_iters, tol=tol)
+    # 4) Kontrola Laplacianu
+    print(f"Minimální hodnota L: {L.min()}, Maximální hodnota L: {L.max()}")
+    print(f"Obsahuje L NaN? {np.isnan(L.data).any()}")
+    print(f"Obsahuje L nekonečna? {np.isinf(L.data).any()}")
+
+
+    # 5) Použití stabilnějšího solveru (lobpcg místo eigsh)
+    X_init = np.random.rand(L.shape[0], k)
+    vals, vecs = lobpcg(L, X_init, largest=False)
+
+    # 6) k-means na vlastních vektorech
+    labels, _ = my_kmeans(vecs, k)
 
     return labels
